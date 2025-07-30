@@ -32,7 +32,8 @@ $entries = Get-ChildItem -Path $bamPath -Recurse | ForEach-Object {
 
         $startTime = try {
             if ($lastUsedStart -gt 0 -and $lastUsedStart -lt [double]::MaxValue) {
-                ([datetime]'1601-01-01').AddMinutes([double]::Parse($lastUsedStart.ToString()))
+                $safeVal = [Math]::Min([double]::MaxValue - 1, [double]::Parse($lastUsedStart.ToString()))
+                ([datetime]'1601-01-01').AddMinutes($safeVal)
             } else {
                 $null
             }
@@ -42,7 +43,8 @@ $entries = Get-ChildItem -Path $bamPath -Recurse | ForEach-Object {
 
         $stopTime = try {
             if ($lastUsedStop -gt 0 -and $lastUsedStop -lt [double]::MaxValue) {
-                ([datetime]'1601-01-01').AddMinutes([double]::Parse($lastUsedStop.ToString()))
+                $safeVal = [Math]::Min([double]::MaxValue - 1, [double]::Parse($lastUsedStop.ToString()))
+                ([datetime]'1601-01-01').AddMinutes($safeVal)
             } else {
                 $null
             }
