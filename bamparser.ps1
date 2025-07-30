@@ -27,108 +27,86 @@ if ((Get-AuthenticodeSignature $MyInvocation.MyCommand.Path).Status -ne "Valid")
 		"NO"{ Exit }
 	}
 }
-
-$Users=$null
-
+$sw = [Diagnostics.Stopwatch]::StartNew()
+#Getting BAM Entries
 
 # MAIN
 if (!(Get-PSDrive -Name HKLM -PSProvider Registry)){
     Try{New-PSDrive -Name HKLM -PSProvider Registry -Root HKEY_LOCAL_MACHINE}
     Catch{"Error Mounting HKEY_Local_Machine"}
 }
-
-Try{$Users = Get-ChildItem -Path "HKLM:\SYSTEM\CurrentControlSet\Services\bam\UserSettings\" -ErrorAction Stop| Select-Object -ExpandProperty PSChildName}
+$bv = ("bam", "bam\State")
+Try{$Users = foreach($ii in $bv){Get-ChildItem -Path "HKLM:\SYSTEM\CurrentControlSet\Services\$($ii)\UserSettings\" | Select-Object -ExpandProperty PSChildName}}
 Catch{
     "Error Parsing BAM Key. Likely unsupported Windows Version"
     exit
 }
+$rpath = @("HKLM:\SYSTEM\CurrentControlSet\Services\bam\","HKLM:\SYSTEM\CurrentControlSet\Services\bam\state\")
 
 $UserTime = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation").TimeZoneKeyName
 $UserBias = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation").ActiveTimeBias
 $UserDay = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation").DaylightBias
-$u=0
-$result = Foreach ($Sid in $Users){$u++
-    $Items = Get-Item -Path "HKLM:\SYSTEM\CurrentControlSet\Services\bam\UserSettings\$Sid" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Property
-	Write-Progress -id 1 -Activity "Collecting Security ID (sid) entries" -Status "SID $u of $($Users.Count))" -PercentComplete (($u / $Users.Count)*100)
-    $i = 0 
+
+
+$Bam = Foreach ($Sid in $Users){$u++
+            
+        foreach($rp in $rpath){
+           Write-Progress -id 1 -Activity "$($rp)"
+           $BamItems = Get-Item -Path "$($rp)UserSettings\$Sid" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Property
+           Write-Progress -id 2 -Activity "Collecting Security ID (sid) entries" -Status "($($Users.Count)) sid: $($objSID.value)" -ParentId 1 
+           $bi = 0 
+	   
+        # Enumerating User - will roll back to SID 
+            Try{
+            $objSID = New-Object System.Security.Principal.SecurityIdentifier($Sid)
+            $User = $objSID.Translate( [System.Security.Principal.NTAccount]) 
+            $User = $User.Value
+            }
+            Catch{$User=""}
+            $i=0
+            ForEach ($Item in $BamItems){$i++
+		    $Key = Get-ItemProperty -Path "$($rp)UserSettings\$Sid" -ErrorAction SilentlyContinue| Select-Object -ExpandProperty $Item
+            Write-Progress -id 3 -Activity "Collecting BAM entries for SID: $($objSID.value)" -Status "(Entry $i of $($BamItems.Count))"  -ParentId 1 
 	
-    # Enumerating User - will roll back to SID on error
-    Try{
-        $objSID = New-Object System.Security.Principal.SecurityIdentifier($Sid) 
-        $User = $objSID.Translate( [System.Security.Principal.NTAccount]) 
-        $User = $User.Value
-    }
-    Catch{$User=""}
-
-    Foreach ($Item in $Items){$i++
-        $Key = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\bam\UserSettings\$Sid" | Select-Object -ExpandProperty $Item
-        Write-Progress -id 2 -Activity "Collecting BAM entries for each User (sid)" -Status "Entry $i of $($Items.Count))"  -ParentId 1 -PercentComplete (([double]$i / $items.Count)*100)
-		
-        If($key.length -eq 24){
-            $Hex=[System.BitConverter]::ToString($key[7..0]) -replace "-",""
-            $TimeLocal = Get-Date ([DateTime]::FromFileTime([Convert]::ToInt64($Hex, 16))) -Format o
-			$TimeUTC = Get-Date ([DateTime]::FromFileTimeUtc([Convert]::ToInt64($Hex, 16))) -Format u
-			$Bias = -([convert]::ToInt32([Convert]::ToString($UserBias,2),2))
-			$Day = -([convert]::ToInt32([Convert]::ToString($UserDay,2),2))
-			$TImeUser = (Get-Date ([DateTime]::FromFileTimeUtc([Convert]::ToInt64($Hex, 16))).addminutes($Bias) -Format s) 
+            If($key.length -eq 24){
+                $Hex=[System.BitConverter]::ToString($key[7..0]) -replace "-",""
+                $TimeLocal = Get-Date ([DateTime]::FromFileTime([Convert]::ToInt64($Hex, 16))) -Format o
+			    $TimeUTC = Get-Date ([DateTime]::FromFileTimeUtc([Convert]::ToInt64($Hex, 16))) -Format u
+			    $Bias = -([convert]::ToInt32([Convert]::ToString($UserBias,2),2))
+			    $Day = -([convert]::ToInt32([Convert]::ToString($UserDay,2),2)) 
+			    $Biasd = $Bias/60
+			    $Dayd = $Day/60
+			    $TImeUser = (Get-Date ([DateTime]::FromFileTimeUtc([Convert]::ToInt64($Hex, 16))).addminutes($Bias) -Format s) 
+			    $d = if((((split-path -path $item) | ConvertFrom-String -Delimiter "\\").P3)-match '\d{1}')
+			    {((split-path -path $item).Remove(23)).trimstart("\Device\HarddiskVolume")} else {$d = ""}
+			    $f = if((((split-path -path $item) | ConvertFrom-String -Delimiter "\\").P3)-match '\d{1}')
+			    {Split-path -leaf ($item).TrimStart()} else {$item}	
+			    $cp = if((((split-path -path $item) | ConvertFrom-String -Delimiter "\\").P3)-match '\d{1}')
+			    {($item).Remove(1,23)} else {$cp = ""}
+			    $path = if((((split-path -path $item) | ConvertFrom-String -Delimiter "\\").P3)-match '\d{1}')
+			    {"(Vol"+$d+") "+$cp} else {$path = ""}			
 			
-			$d = if((((split-path -path $item) | ConvertFrom-String -Delimiter "\\").P3)-match '\d{1}')
-			{((split-path -path $item).Remove(23)).trimstart("\Device\HarddiskVolume")} else {$d = ""}
+                [PSCustomObject]@{
+                            'Examiner Time' = $TimeLocal
+						    'Last Execution Time (UTC)'= $TimeUTC
+						    'Last Execution User Time' = $TimeUser
+						     Application = 	$f
+						     Path =  		$path
+						     User =         $User
+						     Sid =          $Sid
+                             rpath =        $rp
+                             }}}}
+                 }
+             
+           
 
-			$f = if((((split-path -path $item) | ConvertFrom-String -Delimiter "\\").P3)-match '\d{1}')
-			{Split-path -leaf ($item).TrimStart()} else {$item}		
+$Bam|Out-GridView -PassThru -Title "BAM key entries $($Bam.count)  - User TimeZone: ($UserTime) -> ActiveBias: ( $Bias) - DayLightTime: ($Day)"
 
-			$cp = if((((split-path -path $item) | ConvertFrom-String -Delimiter "\\").P3)-match '\d{1}')
-			{($item).Remove(1,23)} else {$cp = ""}			
-			
-			$path = if((((split-path -path $item) | ConvertFrom-String -Delimiter "\\").P3)-match '\d{1}')
-			{"(Vol"+$d+") "+$cp} else {$path = ""}
-			
-            [PSCustomObject]@{
-                        'Last Execution Time (UTC)'= $TimeUTC
-						'Local Time' = $TimeLocal
-						'User Time' = $TimeUser
-						 Application = $f
-						'Full Path' = $path
-						'Bam Original Entry' = $item
-						 User = $User
-						 Sid = $Sid
-						}
-					 	
-		        }
-				
-   }
-   
-}
+$sw.stop()
+$t=$sw.Elapsed.TotalMinutes
+write-host "Elapsed Time $t minutes" -f yellow
 
-$result |Out-GridView -PassThru -Title "BAM key entries  - User TimeZone: ($UserTime) -> ActiveBias: ( $Bias) - DayLightTime: ($Day)"
-[gc]::Collect()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        
 
 
 
@@ -138,8 +116,8 @@ $result |Out-GridView -PassThru -Title "BAM key entries  - User TimeZone: ($User
 # SIG # Begin signature block
 # MIIfcAYJKoZIhvcNAQcCoIIfYTCCH10CAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDakfko8TpNYG4i
-# ev/fmkt0im4EbnKpos+Cp+BGv/SLGqCCGf4wggQVMIIC/aADAgECAgsEAAAAAAEx
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCuV6OeahVhIO5R
+# p/yRDq5XS7tmkodFZCuYtrwH7UXXNaCCGf4wggQVMIIC/aADAgECAgsEAAAAAAEx
 # icZQBDANBgkqhkiG9w0BAQsFADBMMSAwHgYDVQQLExdHbG9iYWxTaWduIFJvb3Qg
 # Q0EgLSBSMzETMBEGA1UEChMKR2xvYmFsU2lnbjETMBEGA1UEAxMKR2xvYmFsU2ln
 # bjAeFw0xMTA4MDIxMDAwMDBaFw0yOTAzMjkxMDAwMDBaMFsxCzAJBgNVBAYTAkJF
@@ -282,26 +260,26 @@ $result |Out-GridView -PassThru -Title "BAM key entries  - User TimeZone: ($User
 # R3JlYXRlciBNYW5jaGVzdGVyMRAwDgYDVQQHEwdTYWxmb3JkMRgwFgYDVQQKEw9T
 # ZWN0aWdvIExpbWl0ZWQxJDAiBgNVBAMTG1NlY3RpZ28gUlNBIENvZGUgU2lnbmlu
 # ZyBDQQIRALjpohQ9sxfPAIfj9za0FgUwDQYJYIZIAWUDBAIBBQCgTDAZBgkqhkiG
-# 9w0BCQMxDAYKKwYBBAGCNwIBBDAvBgkqhkiG9w0BCQQxIgQgZbyK8otEQvWB8Vnh
-# tYDYuYM2sJLtmjiyOfSqzlHR80swDQYJKoZIhvcNAQEBBQAEggEAtjDqBFcQ2iGn
-# PEXAHFL/D1Nb/hsnB+VR2AjqjYX9vRVOamyzgv3VDu5VM/KGt8/tmWNfvXb3mOJZ
-# Ak2rIzc1KMLvJMrzzsKVhda2LMh+k6Tyn7LbwQ0aB8fkpCngF5OUUycfQyoeVpaa
-# Z14BsOSm1N2zf81Y7zF2CWGKBX/QhGu/eIduEPA3bgJoncOguivREQxua3F+DAFU
-# /xnJCDvGE9wDLSNf6b01TN/mJbnP7v8tCqjTa+MNewYCmKPeBtRbnOOSyxeIbcrn
-# tM20u7OkOiE41RiPaf//mGw7mNCRO5M2SFvYucfKpGR3v0dtcAro/PY0U0AwhdO+
-# 7G03o6INzKGCArkwggK1BgkqhkiG9w0BCQYxggKmMIICogIBATBrMFsxCzAJBgNV
+# 9w0BCQMxDAYKKwYBBAGCNwIBBDAvBgkqhkiG9w0BCQQxIgQgocGJ2lf78SwmVD+B
+# 8YNT9aVzYyIhrIn0dH+NEVTC56AwDQYJKoZIhvcNAQEBBQAEggEAvVkLeE+kpeQl
+# SPsLmveU5KG/NuISsDgSqYsh/tZTCt/z0PfPBn6qqOFglTXjB7bAn15y7dgu6xo/
+# q4sQ+lxOEcQI33kjL5U3k73TgkxJI6OsiounPLbywZE6fy9x4GP/snVpIGlM86D/
+# xSxokcg9mKhotskN7xRf/j8nMeNS8pR9qNKf9OzeroyRF5fOy6ps/S5/v6ehBG96
+# COFJdNBim5dQ4+utRD+/GyoehWHbxLtKIB6jwawWkIeRrd20YKZ6KV6UODogteDm
+# tA32QhOkEsWlDhfYHm2klIGzgBUViSobgkC/D3adHzrGm1JTyyG7+Le+cPFjx79x
+# ikwln/rhLaGCArkwggK1BgkqhkiG9w0BCQYxggKmMIICogIBATBrMFsxCzAJBgNV
 # BAYTAkJFMRkwFwYDVQQKExBHbG9iYWxTaWduIG52LXNhMTEwLwYDVQQDEyhHbG9i
 # YWxTaWduIFRpbWVzdGFtcGluZyBDQSAtIFNIQTI1NiAtIEcyAgwkVLh/HhRTrTf6
 # oXgwDQYJYIZIAWUDBAIBBQCgggEMMBgGCSqGSIb3DQEJAzELBgkqhkiG9w0BBwEw
-# HAYJKoZIhvcNAQkFMQ8XDTIwMDMwMTEyMzI1NFowLwYJKoZIhvcNAQkEMSIEIHWN
-# 7sfw3OT09FfY6g0x9GJj0RQrA6V4VnORAeeNPdCMMIGgBgsqhkiG9w0BCRACDDGB
+# HAYJKoZIhvcNAQkFMQ8XDTIwMDMwMTEyMzA0OVowLwYJKoZIhvcNAQkEMSIEIFBE
+# zHMIF/7OgYTtlhZbLVTFGls8RHK/yRiEhJBbYr5IMIGgBgsqhkiG9w0BCRACDDGB
 # kDCBjTCBijCBhwQUPsdm1dTUcuIbHyFDUhwxt5DZS2gwbzBfpF0wWzELMAkGA1UE
 # BhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExMTAvBgNVBAMTKEdsb2Jh
 # bFNpZ24gVGltZXN0YW1waW5nIENBIC0gU0hBMjU2IC0gRzICDCRUuH8eFFOtN/qh
-# eDANBgkqhkiG9w0BAQEFAASCAQC7V4nQRJkhC6/wQNU5BDBvXi/ONWkzAsOGne8q
-# SCnfiqHoN5BbngtooWpkFeIR/a6NmcqciVh3V83/a/WThkpWBm1MVH3PafX0Zb06
-# IN/FZ2lqE013SdX+ErYyIL+JTUFvzehWk5pYdaz0P6S7xZEo+jkxP3mVFwgP9DUw
-# 11/JLw8aszsrkNec97yh7ZG4m7EC012au3rlLKztNhR8OxtOdQesgPoDCl0DXC7N
-# s13lOERWETVFdN5ymH/GPYagLZMmedETrcHeYVJAOMHlPOSdYQoU5/EvZW8LQJpW
-# CubpfG+jtuRicXLXxcHiikuKdyjllhDvBCqTkZup3dORVzSu
+# eDANBgkqhkiG9w0BAQEFAASCAQCCMaBXRgTVnQXRb/D4jjighsc4k7R+M/zzaUFp
+# +oHuAVzdBQeIhIxu3v+eHlXDgayxqUUzXtSbD9UT9cL6K7JI4TWQEapKiaoIVEs/
+# zJGV1nMFcuMtaFChFdQ3mdZYLEy5Th1ywkK12svqM4JcEhQe1KcvkOazgC8GnhMM
+# x4UyxGJ/TXIQ0IsCOlettuPpiXCnoqqNSDK/SvZAkXRUUTOW8tHwuGFt+NSsS980
+# BenftIA07MyZpQES2c5CMN33xgLzV21ozAnu/CQdpeUu6WBFMkAaIsP7OJy4RCrY
+# 0EF6BcZaMOICIN0mwd3xnwoy1Al8SIj/1ZNjjjgBmTKNm8Pz
 # SIG # End signature block
