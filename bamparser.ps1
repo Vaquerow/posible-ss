@@ -1,3 +1,5 @@
+# Requires -RunAsAdministrator
+
 function Get-DigitalSignatureStatus($Path) {
     try {
         $signature = Get-AuthenticodeSignature -FilePath $Path
@@ -28,15 +30,23 @@ $entries = Get-ChildItem -Path $bamPath -Recurse | ForEach-Object {
         $lastUsedStart = $_.LastUsedTimeStart
         $lastUsedStop = $_.LastUsedTimeStop
 
-        $startTime = if ($lastUsedStart -gt 0 -and $lastUsedStart -lt [double]::MaxValue) {
-            ([datetime]'1601-01-01').AddMinutes($lastUsedStart)
-        } else {
+        $startTime = try {
+            if ($lastUsedStart -gt 0 -and $lastUsedStart -lt [double]::MaxValue) {
+                ([datetime]'1601-01-01').AddMinutes([double]::Parse($lastUsedStart.ToString()))
+            } else {
+                $null
+            }
+        } catch {
             $null
         }
 
-        $stopTime = if ($lastUsedStop -gt 0 -and $lastUsedStop -lt [double]::MaxValue) {
-            ([datetime]'1601-01-01').AddMinutes($lastUsedStop)
-        } else {
+        $stopTime = try {
+            if ($lastUsedStop -gt 0 -and $lastUsedStop -lt [double]::MaxValue) {
+                ([datetime]'1601-01-01').AddMinutes([double]::Parse($lastUsedStop.ToString()))
+            } else {
+                $null
+            }
+        } catch {
             $null
         }
 
