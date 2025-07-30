@@ -1,84 +1,53 @@
-$ErrorActionPreference = 'SilentlyContinue'
-
-function Get-DigitalSignatureStatus {
-    param ([string]$Path)
-    if (-not (Test-Path $Path)) {
-        return 'Archivo no encontrado'
-    }
-    $sig = Get-AuthenticodeSignature -FilePath $Path -ErrorAction SilentlyContinue
-    switch ($sig.Status) {
-        'Valid'        { 'Firma válida' }
-        'NotSigned'    { 'No está firmado' }
-        'HashMismatch' { 'Firma inválida (HashMismatch)' }
-        'NotTrusted'   { 'Firma inválida (No confiable)' }
-        default        { "Firma inválida ($($sig.Status))" }
+function Get-DigitalSignatureStatus($Path) {
+    try {
+        $signature = Get-AuthenticodeSignature -FilePath $Path
+        return $signature.Status
+    } catch {
+        return 'Unknown'
     }
 }
 
 function Is-Admin {
-    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
-    $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+    $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal $currentIdentity
+    return $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
 }
 
 if (-not (Is-Admin)) {
-    Write-Warning 'Por favor ejecutá este script como Administrador.'
-    Start-Sleep -Seconds 5
+    Write-Warning "Este script debe ejecutarse como administrador."
+    pause
     exit
 }
 
-Write-Host "`n--- BAM Parser v2 ---`n" -ForegroundColor Cyan
+$bamPath = "HKLM:\SYSTEM\CurrentControlSet\Services\bam\State\UserSettings"
 
-$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+$entries = Get-ChildItem -Path $bamPath -Recurse | ForEach-Object {
+    $userSID = $_.PSChildName
+    Get-ItemProperty -Path $_.PsPath | ForEach-Object {
+        $appPath = $_.PSChildName
+        $lastUsedStart = $_.LastUsedTimeStart
+        $lastUsedStop = $_.LastUsedTimeStop
 
-$bamKeys = @(
-    'HKLM:\SYSTEM\CurrentControlSet\Services\bam\UserSettings',
-    'HKLM:\SYSTEM\CurrentControlSet\Services\bam\State\UserSettings'
-)
-
-$tzInfo = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation'
-$userBias = $tzInfo.ActiveTimeBias
-
-$entries = @()
-
-foreach ($bamKey in $bamKeys) {
-    $userSIDs = Get-ChildItem -Path $bamKey -ErrorAction SilentlyContinue | Select-Object -ExpandProperty PSChildName
-
-    foreach ($sid in $userSIDs) {
-        try {
-            $username = (New-Object System.Security.Principal.SecurityIdentifier($sid)).Translate([System.Security.Principal.NTAccount])
-        } catch {
-            $username = 'Desconocido'
+        $startTime = if ($lastUsedStart -gt 0 -and $lastUsedStart -lt [double]::MaxValue) {
+            ([datetime]'1601-01-01').AddMinutes($lastUsedStart)
+        } else {
+            $null
         }
 
-        $userPath = Join-Path $bamKey $sid
-        $props = (Get-ItemProperty -Path $userPath).PSObject.Properties | Where-Object { $_.Value -is [byte[]] -and $_.Value.Length -eq 24 }
+        $stopTime = if ($lastUsedStop -gt 0 -and $lastUsedStop -lt [double]::MaxValue) {
+            ([datetime]'1601-01-01').AddMinutes($lastUsedStop)
+        } else {
+            $null
+        }
 
-        foreach ($entry in $props) {
-            $rawBytes = $entry.Value[0..7]
-            [Array]::Reverse($rawBytes)
-            $fileTime = [BitConverter]::ToInt64($rawBytes, 0)
-            $utcDate = [DateTime]::FromFileTimeUtc($fileTime)
-            $localDate = $utcDate.AddMinutes(-$userBias)
-
-            $exePath = if ($entry.Name -match '\\Device\\HarddiskVolume\d+\\(.+)$') { "C:\$($Matches[1])" } else { 'Ruta no reconocida' }
-            $appName = Split-Path -Path $exePath -Leaf
-
-            $entries += [PSCustomObject]@{
-                'Fecha (UTC)'       = $utcDate.ToString('yyyy-MM-dd HH:mm:ss')
-                'Fecha (Local)'     = $localDate.ToString('yyyy-MM-dd HH:mm:ss')
-                'Aplicación'         = $appName
-                'Ruta del archivo'  = $exePath
-                'Firma digital'     = Get-DigitalSignatureStatus -Path $exePath
-                'Usuario'           = $username
-                'SID'               = $sid
-                'Registro'          = $bamKey
-            }
+        [PSCustomObject]@{
+            UserSID            = $userSID
+            AppPath            = $appPath
+            LastUsedTimeStart  = $startTime
+            LastUsedTimeStop   = $stopTime
+            SignatureStatus    = Get-DigitalSignatureStatus $appPath
         }
     }
 }
 
-$entries | Out-GridView -Title 'Resultados del Análisis BAM'
-
-$stopwatch.Stop()
-Write-Host "`nAnálisis finalizado en $($stopwatch.Elapsed.TotalSeconds) segundos." -ForegroundColor Green
+$entries | Sort-Object LastUsedTimeStart -Descending | Out-GridView -Title "BAM Activity Parser"
