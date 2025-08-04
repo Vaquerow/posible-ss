@@ -20,7 +20,7 @@ $hackNames = @(
 function Write-Header {
   $art = @"
 ╔══════════════════════════════════════════════════════╗
-║   MINECRAFT HACKED CLIENT DETECTOR (by Copilot)     ║
+║   MINECRAFT HACKED CLIENT DETECTOR                   ║
 ╚══════════════════════════════════════════════════════╝
 "@
   Write-Host $art -ForegroundColor Green
