@@ -118,4 +118,4 @@ if ($bamEntries.Count -eq 0) {
 
 $bamEntries | Out-GridView -Title "BAM Executed Programs"
 $sw.Stop()
-Write-Host "`n✔ Completed in $([math]::Round($sw.Elapsed.TotalSeconds,2)) seconds." -ForegroundColor Green
+Write-Host "`n✔ Completed in $([math]::Round($sw.Elapsed.TotalSeconds,2)) seconds." -ForegroundColor Green"
