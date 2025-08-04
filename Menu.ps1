@@ -36,7 +36,7 @@ do {
 
     switch ($opcion) {
         '1' { Ejecutar-Script "https://raw.githubusercontent.com/gera2ld/jar-parser/refs/heads/master/scripts/util.js" }
-        '2' { Ejecutar-Script "https://raw.githubusercontent.com/Vaquerow/posible-ss/refs/heads/main/bamparser.py" }
+        '2' { Ejecutar-Script "https://raw.githubusercontent.com/Vaquerow/posible-ss/refs/heads/main/bamparser.ps1" }
         '3' { Ejecutar-Script "" }
         '4' { Ejecutar-Script "" }
         '0' {
