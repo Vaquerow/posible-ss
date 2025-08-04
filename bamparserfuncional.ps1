@@ -17,7 +17,7 @@ param(
 function Show-Banner {
     $banner = @"
 ╔══════════════════════════════════════════════════════╗
-║                 BAM ANALYZER - PowerShell           ║
+║                 BAM ANALYZER - PowerShell            ║
 ╚══════════════════════════════════════════════════════╝
 "@
     Write-Host $banner -ForegroundColor Cyan
