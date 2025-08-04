@@ -115,11 +115,12 @@ function Get-BamEntries {
 
                     $entries += [PSCustomObject]@{
                         'Usuario'             = $user
+                        'Hora ejecución UTC'  = $dtUtc
+                        'Hora ejecución local'= $localTime
                         'Aplicación'          = $appName
                         'Ruta del archivo'    = $filePath
                         'Firma digital'       = $signature
-                        'Hora ejecución UTC'  = $dtUtc
-                        'Hora ejecución local'= $localTime
+
                     }
                 }
             }
