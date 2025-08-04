@@ -35,7 +35,7 @@ do {
     $opcion = Read-Host "Selecciona una opción (0-4)"
 
     switch ($opcion) {
-        '1' { Ejecutar-Script "https://raw.githubusercontent.com/gera2ld/jar-parser/refs/heads/master/scripts/util.js" }
+        '1' { Ejecutar-Script "https://raw.githubusercontent.com/Vaquerow/posible-ss/refs/heads/main/jarparserfuncional.ps1" }
         '2' { Ejecutar-Script "https://raw.githubusercontent.com/Vaquerow/posible-ss/refs/heads/main/bamparser.ps1" }
         '3' { Ejecutar-Script "" }
         '4' { Ejecutar-Script "" }
