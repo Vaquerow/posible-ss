@@ -172,4 +172,4 @@ if ($ExportCSV) {
 }
 
 $sw.Stop()
-Write-Host "`n✔ Ejecutado en $([math]::Round($sw.Elapsed.TotalSeconds,2)) segundos." -ForegroundColor Yellow
+Write-Host "`n✔ Ejecutado en $([math]::Round($sw.Elapsed.TotalSeconds,2)) segundos." 
