@@ -158,7 +158,7 @@ $grouped = $bamEntries | Group-Object Usuario, Aplicacion, 'Ruta del archivo' | 
         'Aplicacion'          = $first.Aplicacion
         'Ruta del archivo'    = $first.'Ruta del archivo'
         'Primera ejecucion'   = $first.'Hora ejecucion local'
-        'Última ejecucion'    = $last.'Hora ejecucion local'
+        'Ultima ejecucion'    = $last.'Hora ejecucion local'
         'Firma digital'       = $first.'Firma digital'
     }
 }
