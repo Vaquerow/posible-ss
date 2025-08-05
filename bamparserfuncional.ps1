@@ -115,9 +115,9 @@ function Get-BamEntries {
 
                     $entries += [PSCustomObject]@{
                         'Usuario'             = $user
-                        'Hora ejecución UTC'  = $dtUtc
-                        'Hora ejecución local'= $localTime
-                        'Aplicación'          = $appName
+                        'Hora ejecucion UTC'  = $dtUtc
+                        'Hora ejecucion local'= $localTime
+                        'Aplicacion'          = $appName
                         'Ruta del archivo'    = $filePath
                         'Firma digital'       = $signature
 
@@ -149,17 +149,13 @@ if (-not $bamEntries -or $bamEntries.Count -eq 0) {
     exit
 }
 
-# Group by Usuario + Aplicación + Ruta, show first and last execution
-$grouped = $bamEntries | Group-Object Usuario, Aplicación, 'Ruta del archivo' | ForEach-Object {
-    $first = $_.Group | Sort-Object 'Hora ejecución UTC' | Select-Object -First 1
-    $last  = $_.Group | Sort-Object 'Hora ejecución UTC' -Descending | Select-Object -First 1
+# Group by Usuario + Aplicacion + Ruta, show first and last execution
+$grouped = $bamEntries | Group-Object Usuario, Aplicacion, 'Ruta del archivo' | ForEach-Object {
+    $first = $_.Group | Sort-Object 'Hora ejecucion UTC' | Select-Object -First 1
+    $last  = $_.Group | Sort-Object 'Hora ejecucion UTC' -Descending | Select-Object -First 1
     [PSCustomObject]@{
         'Usuario'             = $first.Usuario
-        'Aplicación'          = $first.Aplicación
-        'Ruta del archivo'    = $first.'Ruta del archivo'
-        'Primera ejecución'   = $first.'Hora ejecución local'
-        'Última ejecución'    = $last.'Hora ejecución local'
-        'Firma digital'       = $first.'Firma digital'
+        'Aplicacion'          = $first.Aplicacion
     }
 }
 
@@ -167,10 +163,10 @@ if ($ExportCSV) {
     $grouped | Export-Csv -Path $CsvPath -NoTypeInformation
     Write-Host "`nExportado a $CsvPath" -ForegroundColor Green
 } elseif (Get-Command Out-GridView -ErrorAction SilentlyContinue) {
-    $grouped | Out-GridView -Title "Primera y última ejecución por programa y usuario"
+    $grouped | Out-GridView -Title "Primera y última ejecucion por programa y usuario"
 } else {
     $grouped | Format-Table -AutoSize
 }
 
 $sw.Stop()
-Write-Host "`n✔ Ejecutado en $([math]::Round($sw.Elapsed.TotalSeconds,2)) segundos." 
+Write-Host "`n✔ Ejecutado en $([math]::Round($sw.Elapsed.TotalSeconds,2)) segundos. 
