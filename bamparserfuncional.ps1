@@ -167,7 +167,7 @@ if ($ExportCSV) {
     $grouped | Export-Csv -Path $CsvPath -NoTypeInformation
     Write-Host "`nExportado a $CsvPath" -ForegroundColor Green
 } elseif (Get-Command Out-GridView -ErrorAction SilentlyContinue) {
-    $grouped | Out-GridView -Title "Primera y última ejecucion por programa y usuario"
+    $grouped | Out-GridView -Title "Primera y ultima ejecucion por programa y usuario"
 } else {
     $grouped | Format-Table -AutoSize
 }
